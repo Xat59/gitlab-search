@@ -8,7 +8,7 @@ def eprint(*args, **kwargs):
     # https://stackoverflow.com/a/14981125
     print(*args, file=sys.stderr, **kwargs)
 
-def search(gitlab_server, token, file_filter, text, group=None, project_filter=None, api_debug=False, internal_debug=False, filename_regex=False):
+def search(gitlab_server, token, file_filter, text, group=None, project_filter=None, api_debug=False, internal_debug=False, filename_regex=False, branch_filter=None):
     return_value = []
     
     gl = gitlab.Gitlab(gitlab_server, private_token=token)
@@ -37,45 +37,56 @@ def search(gitlab_server, token, file_filter, text, group=None, project_filter=N
 
 
     for project in projects:
-        if internal_debug:
-            if hasattr(project, 'path'):
-                path = project.path
-            else:
-                path = project.name
-            eprint("Project: ",path)
+        if not branch_filter:
+            project_branches = project.branches.list()
+            branches = []
+            for branch in project_branches:
+                branches.append(branch.name)
+        else:
+            branches = branch_filter.split(',')
 
-        files = []
-        try:
-            files = project.repository_tree(recursive=True, all=True)
-        except Exception as e:
-            print(str(e), "Error getting tree in project:", project.name)
-
-        # remove files to be analyzed from the list that are directories
-        for file in files[:]:
-            if file['type'] == 'tree':
-                files.remove(file)
-
-        for file in files:
+        for branch in branches:
             if internal_debug:
-                fpath = file.get('path',None) if file.get('path',None)!=None else file.get('name',None)
-                eprint("  File: ",fpath)
+                if hasattr(project, 'path'):
+                    path = project.path
+                else:
+                    path = project.name
+                eprint("Project: ",path)
+                eprint("  Branch name: " + branch)
 
-            if filename_regex:
-                matches=re.findall(file_filter, file['name'])
-                filename_matches = len(matches)>0
-            else:
-                filename_matches=file_filter == file['name']
-            
-            if filename_matches:
-                file_content = project.files.raw(file_path=file['path'], ref='master')
+            files = []
+            try:
+                files = project.repository_tree(recursive=True, all=True, ref=branch)
+            except Exception as e:
+                print(str(e), "Error getting tree in project:", project.name)
+
+            # remove files to be analyzed from the list that are directories
+            for file in files[:]:
+                if file['type'] == 'tree':
+                    files.remove(file)
+
+            for file in files:
+                if internal_debug:
+                    fpath = file.get('path',None) if file.get('path',None)!=None else file.get('name',None)
+                    eprint("    File: ",fpath)
+
+                if filename_regex:
+                    matches=re.findall(file_filter, file['name'])
+                    filename_matches = len(matches)>0
+                else:
+                    filename_matches=file_filter == file['name']
                 
-                if text in str(file_content):
-                    return_value.append({
-                        "project": project.name,
-                        "file": file['path']
-                    })
-    
-    return return_value
+                if filename_matches:
+                    file_content = project.files.raw(file_path=file['path'], ref=branch)
+
+                    if text in str(file_content):
+                        return_value.append({
+                            "project": project.name,
+                            "branch": branch,
+                            "file": file['path']
+                        })
+
+        return return_value
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -88,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument("TEXT_TO_SEARCH",     nargs=1,             help="Text to find in files")
     parser.add_argument("GROUP",              nargs='?',           help="Group to search for projects in, can be subgroup eg. parent_group/subgroup/another_subgroup")
     parser.add_argument("PROJECT_FILTER",     nargs='?',           help="Filter for project names to look into")
+    parser.add_argument("BRANCH_FILTER",      nargs='?',           help="Filter for branch names to look into, separated by commas. Eg. 'master,dev,v1.0'")
     args = parser.parse_args()
 
     api_debug_arg      = args.api_debug
@@ -99,5 +111,6 @@ if __name__ == '__main__':
     text_arg           = args.TEXT_TO_SEARCH[0]
     group_arg          = None if args.GROUP          == None else args.GROUP
     project_filter_arg = None if args.PROJECT_FILTER == None else args.PROJECT_FILTER
+    branche_filter_arg = None if args.BRANCH_FILTER  == None else args.BRANCH_FILTER
 
-    print(search(gitlab_server_arg, token_arg, file_filter_arg, text_arg, group_arg, project_filter_arg, api_debug_arg, internal_debug_arg, regex_arg))
+    print(search(gitlab_server_arg, token_arg, file_filter_arg, text_arg, group_arg, project_filter_arg, api_debug_arg, internal_debug_arg, regex_arg, branche_filter_arg))
