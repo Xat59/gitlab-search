@@ -50,6 +50,11 @@ def search(gitlab_server, token, file_filter, text, group=None, project_filter=N
         except Exception as e:
             print(str(e), "Error getting tree in project:", project.name)
 
+        # remove files to be analyzed from the list that are directories
+        for file in files[:]:
+            if file['type'] == 'tree':
+                files.remove(file)
+
         for file in files:
             if internal_debug:
                 fpath = file.get('path',None) if file.get('path',None)!=None else file.get('name',None)
