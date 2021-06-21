@@ -74,8 +74,8 @@ def search(gitlab_server, token, file_filter, text, group=None, project_filter=N
                     matches=re.findall(file_filter, file['name'])
                     filename_matches = len(matches)>0
                 else:
-                    filename_matches=file_filter == file['name']
-                
+                    filename_matches = (file_filter == file['name'])
+
                 if filename_matches:
                     file_content = project.files.raw(file_path=file['path'], ref=branch)
 
@@ -86,7 +86,7 @@ def search(gitlab_server, token, file_filter, text, group=None, project_filter=N
                             "file": file['path']
                         })
 
-        return return_value
+    return return_value
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
